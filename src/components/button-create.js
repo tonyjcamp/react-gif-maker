@@ -17,7 +17,7 @@ const ButtonCreate = React.createClass({
 
         // console.log('sending:', body)
 
-        if(outpoint - inpoint > 10) {
+        if(outpoint - inpoint > 6) {
           return alert('GIF Duration is too long!')
         }
 
