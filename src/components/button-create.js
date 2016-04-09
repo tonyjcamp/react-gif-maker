@@ -17,6 +17,10 @@ const ButtonCreate = React.createClass({
 
         // console.log('sending:', body)
 
+        if(outpoint - inpoint > 10) {
+          return alert('GIF Duration is too long!')
+        }
+
         fetch('http://104.236.133.144:8081/gifs', {
             method: 'post',
             headers: {
