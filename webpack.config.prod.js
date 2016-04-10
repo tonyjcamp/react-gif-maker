@@ -31,7 +31,14 @@ module.exports = {
         test: /\.(js|jsx|babel)$/,
         include: path.join(__dirname, 'src'),
         exclude: path.join(__dirname, 'node_modules')
-      }
+      },
+      {
+        test:   /\.css$/,
+        loader: 'style-loader!css-loader!postcss-loader'
+      },
     ]
+  },
+  postcss() {
+    return [require('autoprefixer'), require('precss')]
   }
 };
