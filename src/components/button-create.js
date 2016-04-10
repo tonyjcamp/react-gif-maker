@@ -17,8 +17,8 @@ const ButtonCreate = React.createClass({
 
         // console.log('sending:', body)
 
-        if(outpoint - inpoint > 6) {
-          return alert('GIF Duration is too long!')
+        if(outpoint - inpoint < 0) {
+          return alert('Your outpoint must come after your inpoint')
         }
 
         fetch('http://104.236.133.144:8081/gifs', {

@@ -71,7 +71,7 @@ const App = React.createClass({
 
             <div className='clearfix col-xs-8 col-xs-offset-2' style={previewImages}>
                 <PreviewStartingPoint />
-                <PreviewEndPoint />
+                <PreviewEndPoint inpoint={inpoint} />
             </div>
 
             <div className='col-xs-8 col-xs-offset-2' style={removePadding}>

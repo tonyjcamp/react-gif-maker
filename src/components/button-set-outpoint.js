@@ -9,12 +9,27 @@ const ButtonSetOutpoint = React.createClass({
 
     propTypes: {
         handleSetCurrtime: PropTypes.func.isRequired,
-        createPreviewImage: PropTypes.func.isRequired
+        createPreviewImage: PropTypes.func.isRequired,
+        inpoint: PropTypes.number.isRequired
     },
 
-    setCurrtime() {
-        const video = document.querySelector('.video-player')
-        const currTime = video.currentTime
+    checkDuration() {
+      const video = document.querySelector('.video-player')
+      const currTime = video.currentTime
+      const {inpoint} = this.props
+
+      if(currTime - inpoint > 6) {
+        return alert('GIF Duration is too long! Duration must be less than 6 seconds')
+      }
+
+      if(currTime - inpoint <= 0) {
+        return alert('Your outpoint must come after your inpoint')
+      }
+      
+      this.setCurrtime(video, currTime)
+    },
+
+    setCurrtime(video, currTime) {
         const {handleSetCurrtime, createPreviewImage} = this.props
 
         video.pause()
@@ -23,19 +38,9 @@ const ButtonSetOutpoint = React.createClass({
     },
 
     render() {
-        const {setCurrtime} = this
+        const {checkDuration} = this
 
-        // console.log(document.querySelector('.btn-container'), ' element')
-
-
-        // if( !this.props.inpoint ) {
-        //     el.style.display = 'none'
-        // } else {
-        //     el.style.display = ''
-        // }
-
-
-        return <div className='col-xs-6' style={buttonStyle}><button type='button' onClick={setCurrtime} className='btn btn-info btn-end col-xs-12'>Set Ending Point</button></div>
+        return <div className='col-xs-6' style={buttonStyle}><button type='button' onClick={checkDuration} className='btn btn-info btn-end col-xs-12'>Set Ending Point</button></div>
     }
 
 })
