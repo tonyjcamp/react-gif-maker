@@ -25,7 +25,7 @@ module.exports = {
       },
       {
         test:   /\.css$/,
-        loader: "style-loader!css-loader!postcss-loader"
+        loader: 'style-loader!css-loader!postcss-loader'
       },
       {
         test: /\.json$/,
@@ -34,11 +34,8 @@ module.exports = {
     ]
   },
 
-  postcss: function () {
-    return {
-      defaults: [autoprefixer, precss],
-      cleaner:  [autoprefixer({ browsers: [] })]
-    };
+  postcss() {
+    return [require('autoprefixer'), require('precss')]
   },
 
   node: {
