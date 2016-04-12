@@ -2,7 +2,7 @@ import React, {PropTypes} from 'react'
 import {render} from 'react-dom'
 import fetch from 'isomorphic-fetch'
 
-import Loading from './loading.js'
+import FinalImage from './final-image.js'
 require('../css/loading-button.css')
 
 const ButtonCreate = React.createClass({
@@ -61,7 +61,7 @@ const ButtonCreate = React.createClass({
         const {createGIF} = this
         return <div>
             <button type="submit" className="btn btn-success button-create col-xs-12" onClick={createGIF}>Create Animated GIF</button>
-            <Loading />
+            <FinishedImage />
         </div>
     }
 

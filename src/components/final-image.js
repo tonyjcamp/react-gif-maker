@@ -1,9 +1,9 @@
 import React, {PropTypes} from 'react'
 import {render} from 'react-dom'
 
-const Loading = React.createClass({
+const FinishedImage = React.createClass({
 
-  displayName: 'Loading',
+  displayName: 'Finished Image',
 
   render() {
     return <div className="final-image"></div>
@@ -11,4 +11,4 @@ const Loading = React.createClass({
 
 })
 
-export default Loading
+export default FinishedImage
