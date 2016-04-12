@@ -2,9 +2,6 @@ import React, {PropTypes} from 'react'
 import {render} from 'react-dom'
 import fetch from 'isomorphic-fetch'
 
-import FinalImage from './final-image.js'
-require('../css/loading-button.css')
-
 const ButtonCreate = React.createClass({
 
     displayName: 'Create Button',
@@ -14,24 +11,26 @@ const ButtonCreate = React.createClass({
     },
 
     disableCreateButton() {
-      const createButton = document.querySelector('.button-create')
+      const createGIFButton = document.querySelector('.button-create')
       const loadingIcon = document.createElement('span')
 
       loadingIcon.className = 'glyphicon glyphicon-cog icon-loading-animate'
-      createButton.className = 'btn btn-success button-create col-xs-12 disabled'
-      createButton.innerHTML = 'Creating GIF, We Be Giffn  '
-      createButton.appendChild(loadingIcon)
+      createGIFButton.className = 'btn btn-success button-create col-xs-12 disabled'
+      createGIFButton.innerHTML = 'Creating GIF, We Be Giffn  '
 
-      return createButton
+      createGIFButton.appendChild(loadingIcon)
+
+      return createGIFButton
     },
 
     createGIF() {
         const {videoURL, inpoint, outpoint} = this.props
         const body  = {videoURL, inpoint, outpoint}
-        const finalImage = document.querySelector('.final-image')
-        const createButton = this.disableCreateButton()
+        const finishedImageContainer = document.querySelector('.finished-image-container')
+        const finishedImage = document.querySelector('.finished-image')
+        const createGIFButton = this.disableCreateButton()
 
-        finalImage.innerHTML = ''
+        finishedImage.innerHTML = ''
 
         if(outpoint - inpoint < 0) {
           return alert('Your outpoint must come after your inpoint')
@@ -50,10 +49,11 @@ const ButtonCreate = React.createClass({
             }
             return response.text();
         }).then(function(body) {
-            createButton.className = 'btn btn-success button-create col-xs-12'
-            createButton.innerHTML = 'Create Another GIF'
+            createGIFButton.className = 'btn btn-success button-create col-xs-12'
+            createGIFButton.innerHTML = 'Create Another GIF'
 
-            finalImage.innerHTML = body
+            finishedImageContainer.style.display = 'block'
+            finishedImage.innerHTML = body
         })
     },
 
@@ -61,7 +61,6 @@ const ButtonCreate = React.createClass({
         const {createGIF} = this
         return <div>
             <button type="submit" className="btn btn-success button-create col-xs-12" onClick={createGIF}>Create Animated GIF</button>
-            <FinishedImage />
         </div>
     }
 

@@ -8,6 +8,9 @@ import ButtonSetOutpoint from '../components/button-set-outpoint'
 import PreviewStartingPoint from '../components/preview-inpoint'
 import PreviewEndPoint from '../components/preview-outpoint'
 import ButtonCreate from '../components/button-create'
+import FinishedImage from '../components/finished-image.js'
+
+require('../css/loading-button.css')
 
 const App = React.createClass({
 
@@ -77,6 +80,8 @@ const App = React.createClass({
             <div className='col-xs-8 col-xs-offset-2' style={removePadding}>
                 <ButtonCreate videoURL={videoURL} inpoint={inpoint} outpoint={outpoint} />
             </div>
+
+            <FinishedImage />
         </div>
     }
 
