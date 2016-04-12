@@ -6,7 +6,7 @@
 npm install
 ```
 
-##### Start Dev Server
+#### Start Dev Server
 ```sh
-npm Start
+npm start
 ```
