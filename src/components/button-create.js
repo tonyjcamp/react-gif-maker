@@ -47,6 +47,7 @@ const ButtonCreate = React.createClass({
             if (response.status >= 400) {
                 throw new Error('Bad response from server', response.text())
             }
+            console.log(response)
             return response.text();
         }).then(function(body) {
             createGIFButton.className = 'btn btn-success button-create col-xs-12'
