@@ -28,29 +28,26 @@ const VideoInput = React.createClass({
             url: videoURL
         }
 
-        if(videoURL.indexOf('youtube.com')) {
-            fetch('http://104.236.133.144:8081/ytvideo',
-            {
-                method: 'post',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
-            }
-            ).then(function(response) {
-                if (response.status >= 400) {
-                    throw new Error('Bad response from server', response.text())
-                }
-                return response.text()
-            }).then(function(body) {
-                // document.querySelector('.final-image').innerHTML = body
-                console.log('Success, body: ', body)
-
-                that.props.handleVideoChange(body)
-            })
-            return
+        fetch('http://104.236.133.144:8081/ytvideo',
+        {
+            method: 'post',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
         }
+        ).then(function(response) {
+            if (response.status >= 400) {
+                throw new Error('Bad response from server', response.text())
+            }
+            return response.text()
+        }).then(function(body) {
+            // document.querySelector('.final-image').innerHTML = body
+            console.log('Success, body: ', body)
+
+            that.props.handleVideoChange(body)
+        })
 
         this.props.handleVideoChange(videoURL)
     },
