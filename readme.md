@@ -1,5 +1,5 @@
 ### React-Gif-Maker
-Fetch a youtube video via URL or a .mp4 file to load into the video player.
+Fetch a video via these sites <https://github.com/rg3/youtube-dl/blob/master/docs/supportedsites.md> or a .mp4 file to load into the video player.
 
 Set an inpoint (where you want the finished gif to start) and an outpoint (where you want it to end).
 
