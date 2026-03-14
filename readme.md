@@ -5,16 +5,16 @@ Paste a video URL or YouTube link, trim a clip (up to 6 seconds), and generate a
 ## Requirements
 
 - Node.js 18+
-- ffmpeg installed on your system
-
-Install ffmpeg if you don't have it:
+- ffmpeg
+- yt-dlp (for YouTube URL support)
 
 ```bash
 # macOS
-brew install ffmpeg
+brew install ffmpeg yt-dlp
 
 # Ubuntu/Debian
 sudo apt install ffmpeg
+pip install yt-dlp
 ```
 
 ## Getting Started
@@ -28,13 +28,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Configuration
 
-If ffmpeg is installed at a non-standard path, set `FFMPEG_PATH` in a `.env.local` file:
+If ffmpeg or yt-dlp are installed at non-standard paths, set these in a `.env.local` file:
 
 ```
 FFMPEG_PATH=/path/to/ffmpeg
+YTDLP_PATH=/path/to/yt-dlp
 ```
 
-By default the app expects `ffmpeg` to be available on your system `PATH`, which is the case after a standard install via Homebrew or apt.
+By default both are expected on your system `PATH`, which is the case after a standard install via Homebrew or apt.
 
 ## How It Works
 
