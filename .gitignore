@@ -42,3 +42,7 @@ next-env.d.ts
 
 # ytdl-core player scripts (cached to project root at runtime)
 *-player-script.js
+
+# yt-dlp temp fragment files
+*.part
+--Frag*
