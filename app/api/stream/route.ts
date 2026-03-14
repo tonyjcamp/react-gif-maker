@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
       '-g',
       '-f', 'best[ext=mp4][protocol=https]/best[ext=mp4]/18',
       '--no-playlist',
+      '--js-runtimes', 'node',
+      '--extractor-args', 'youtube:player_client=android_vr,android,web',
       url,
     ])
     directURL = stdout.trim()

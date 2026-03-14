@@ -127,6 +127,8 @@ export async function POST(req: NextRequest) {
           '-f', 'best[ext=mp4]/best',
           '-o', '-',
           '--no-playlist',
+          '--js-runtimes', 'node',
+          '--extractor-args', 'youtube:player_client=android_vr,android,web',
           sourceURL,
         ])
         command.input(ytDlp.stdout)
