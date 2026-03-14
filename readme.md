@@ -1,22 +1,36 @@
-### React-Gif-Maker
-Fetch a video via these sites <https://github.com/rg3/youtube-dl/blob/master/docs/supportedsites.md> or a .mp4 file to load into the video player.
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-Set an inpoint (where you want the finished gif to start) and an outpoint (where you want it to end).
+## Getting Started
 
-Click Create Animated GIF, give it some time. Before you know it, you'll have a nicely compressed .gif file ready to share with the world.
+First, run the development server:
 
-#### Still very untested
-Please be aware, we haven't done a great deal of testing. If you notice something strange, let us know by filing an issue.
-
-#### Installation
-
-```sh
-npm install
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-#### Start Dev Server
-```sh
-npm start
-```
-#### Bugs
-Some Safari browsers running on El Capitan will not display preview thumbnails properly. The only work around right now is to simply resize your browser.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
