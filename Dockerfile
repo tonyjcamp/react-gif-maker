@@ -1,21 +1,21 @@
 # Stage 1: Install dependencies
-FROM cgr.dev/chainguard/node:latest-dev AS deps
+FROM cgr.dev/0-cve.com/node:latest-dev AS deps
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
 # Stage 2: Build Next.js
-FROM cgr.dev/chainguard/node:latest-dev AS builder
+FROM cgr.dev/0-cve.com/node:latest-dev AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
 # Stage 3: ffmpeg source
-FROM cgr.dev/chainguard/ffmpeg AS ffmpeg-source
+FROM cgr.dev/0-cve.com/ffmpeg AS ffmpeg-source
 
 # Stage 4: Runtime
-FROM cgr.dev/chainguard/node:latest
+FROM cgr.dev/0-cve.com/node:latest
 WORKDIR /app
 
 # Copy Next.js standalone output
