@@ -7,9 +7,9 @@ import { isIP } from 'net'
 import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
+import { ytDlpPath, baseArgs, writeCookieFile, deleteCookieFile } from '../ytdlp'
 
 const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg'
-const ytDlpPath = process.env.YTDLP_PATH || 'yt-dlp'
 ffmpeg.setFfmpegPath(ffmpegPath)
 
 // Rate limiting: 5 GIF requests per IP per minute
@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
   }
 
   const tmpFile = path.join(os.tmpdir(), `gif-${crypto.randomUUID()}.gif`)
+  const cookiePath = isYouTube ? await writeCookieFile() : null
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -126,9 +127,8 @@ export async function POST(req: NextRequest) {
         const ytDlp = spawn(ytDlpPath, [
           '-f', 'best[ext=mp4]/best',
           '-o', '-',
-          '--no-playlist',
-          '--js-runtimes', 'node',
-          '--extractor-args', 'youtube:player_client=android_vr,android,web',
+          ...baseArgs,
+          ...(cookiePath ? ['--cookies', cookiePath] : []),
           sourceURL,
         ])
         command.input(ytDlp.stdout)
@@ -162,5 +162,7 @@ export async function POST(req: NextRequest) {
     await fs.unlink(tmpFile).catch(() => {})
     console.error('ffmpeg error:', err)
     return NextResponse.json({ error: 'GIF generation failed' }, { status: 500 })
+  } finally {
+    await deleteCookieFile(cookiePath)
   }
 }

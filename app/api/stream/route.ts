@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { ytDlpPath, baseArgs, writeCookieFile, deleteCookieFile } from '../ytdlp'
 
 const execFileAsync = promisify(execFile)
-const ytDlpPath = process.env.YTDLP_PATH || 'yt-dlp'
 
 function isValidYouTubeURL(url: string): boolean {
   try {
@@ -24,25 +24,25 @@ export async function GET(req: NextRequest) {
     return new Response('Invalid YouTube URL', { status: 400 })
   }
 
-  // Resolve the direct CDN URL server-side — it's tied to the server's IP
-  // so we must proxy it rather than redirecting the browser directly
+  const cookiePath = await writeCookieFile()
   let directURL: string
   try {
-    const { stdout } = await execFileAsync(ytDlpPath, [
+    const args = [
       '-g',
       '-f', 'best[ext=mp4][protocol=https]/best[ext=mp4]/18',
-      '--no-playlist',
-      '--js-runtimes', 'node',
-      '--extractor-args', 'youtube:player_client=android_vr,android,web',
+      ...baseArgs,
+      ...(cookiePath ? ['--cookies', cookiePath] : []),
       url,
-    ])
+    ]
+    const { stdout } = await execFileAsync(ytDlpPath, args)
     directURL = stdout.trim()
   } catch (err) {
     console.error('yt-dlp error:', err)
     return new Response('Failed to resolve video URL', { status: 500 })
+  } finally {
+    await deleteCookieFile(cookiePath)
   }
 
-  // Forward range requests so the browser can seek
   const headers: HeadersInit = {}
   const rangeHeader = req.headers.get('range')
   if (rangeHeader) headers['Range'] = rangeHeader
