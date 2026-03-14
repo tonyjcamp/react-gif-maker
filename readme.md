@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# React GIF Maker
+
+Paste a video URL or YouTube link, trim a clip (up to 6 seconds), and generate an animated GIF.
+
+## Requirements
+
+- Node.js 18+
+- ffmpeg installed on your system
+
+Install ffmpeg if you don't have it:
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt install ffmpeg
+```
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Configuration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+If ffmpeg is installed at a non-standard path, set `FFMPEG_PATH` in a `.env.local` file:
 
-## Learn More
+```
+FFMPEG_PATH=/path/to/ffmpeg
+```
 
-To learn more about Next.js, take a look at the following resources:
+By default the app expects `ffmpeg` to be available on your system `PATH`, which is the case after a standard install via Homebrew or apt.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## How It Works
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Paste a direct video URL (MP4) or a YouTube link and click Fetch
+2. Play the video and use the arrow keys for frame-by-frame scrubbing
+3. Click "Set Starting Point" and "Set Ending Point" to define your clip (max 6 seconds)
+4. Click "Create Animated GIF" — the server uses ffmpeg to generate the GIF and returns it for download
 
-## Deploy on Vercel
+YouTube URLs are proxied through the server to work around browser CORS restrictions.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This app requires a server environment with ffmpeg installed. It is not compatible with Vercel's serverless functions due to binary size and timeout constraints. Suitable options include:
+
+- A VPS (DigitalOcean, Linode, etc.)
+- A container platform (Fly.io, Render, Railway) with ffmpeg in the Dockerfile
+- Any self-hosted Node.js server

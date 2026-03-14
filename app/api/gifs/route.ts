@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ffmpeg from 'fluent-ffmpeg'
-import ffmpegStatic from 'ffmpeg-static'
 import ytdl from '@distube/ytdl-core'
 import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
 
-ffmpeg.setFfmpegPath(ffmpegStatic as string)
+// Use FFMPEG_PATH env var if set, otherwise fall back to system ffmpeg
+const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg'
+ffmpeg.setFfmpegPath(ffmpegPath)
 
 export async function POST(req: NextRequest) {
   const { videoURL, inpoint, outpoint } = await req.json()
