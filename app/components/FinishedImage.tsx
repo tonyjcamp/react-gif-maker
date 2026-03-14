@@ -8,21 +8,6 @@ interface Props {
 export default function FinishedImage({ gifUrl, onClose }: Props) {
   if (!gifUrl) return null
 
-  async function copyToClipboard() {
-    try {
-      await navigator.clipboard.writeText(gifUrl!)
-      alert('URL copied to clipboard!')
-    } catch {
-      // fallback for older browsers
-      const input = document.createElement('input')
-      input.value = gifUrl!
-      document.body.appendChild(input)
-      input.select()
-      document.execCommand('copy')
-      document.body.removeChild(input)
-    }
-  }
-
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 relative">
@@ -34,12 +19,13 @@ export default function FinishedImage({ gifUrl, onClose }: Props) {
         </button>
         <h2 className="text-lg font-semibold mb-4">Your GIF is ready!</h2>
         <img src={gifUrl} alt="Generated GIF" className="w-full rounded mb-4" />
-        <button
-          className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded font-medium"
-          onClick={copyToClipboard}
+        <a
+          href={gifUrl}
+          download="output.gif"
+          className="block w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded font-medium text-center"
         >
-          Copy URL to Clipboard
-        </button>
+          Download GIF
+        </a>
       </div>
     </div>
   )
