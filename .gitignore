@@ -46,3 +46,5 @@ next-env.d.ts
 # yt-dlp temp fragment files
 *.part
 --Frag*
+*.sbom.json
+*-sbom.json
