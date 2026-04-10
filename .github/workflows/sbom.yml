@@ -1,0 +1,19 @@
+name: Generate and Publish SBOM
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate and Upload SBOM
+        uses: manifest-cyber/manifest-github-action@v1.6.0
+        with:
+          apiKey: ${{ secrets.MANIFEST_API_KEY }}
+          sbomGenerator: syft
+          sbomOutput: cyclonedx-json
+          relationship: first
