@@ -53,3 +53,4 @@ This app requires a server environment with ffmpeg installed. It is not compatib
 - A VPS (DigitalOcean, Linode, etc.)
 - A container platform (Fly.io, Render, Railway) with ffmpeg in the Dockerfile
 - Any self-hosted Node.js server
+- More soon...
