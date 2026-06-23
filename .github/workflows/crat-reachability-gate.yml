@@ -1,8 +1,9 @@
 name: CrAT Reachability Gate
 
-# Manually triggered for now (testcase). To gate real PRs later, add a
-# `pull_request:` trigger and make this job a required status check in branch
-# protection.
+# Runs on every PR to master as a required status check (branch protection
+# enforces it for everyone, admins included). The PR is blocked when any
+# vulnerability that is reachable from this repo's code is HIGH or CRITICAL.
+# Also runnable by hand via workflow_dispatch (severity_floor, dry_run inputs).
 on:
   pull_request:
     branches: [master]
