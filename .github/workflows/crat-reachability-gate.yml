@@ -4,6 +4,8 @@ name: CrAT Reachability Gate
 # `pull_request:` trigger and make this job a required status check in branch
 # protection.
 on:
+  pull_request:
+    branches: [master]
   workflow_dispatch:
     inputs:
       severity_floor:
@@ -119,7 +121,7 @@ jobs:
           node "$GITHUB_WORKSPACE/scripts/crat-gate.mjs" \
             --watchlist "$GITHUB_WORKSPACE/crat-watchlist.json" \
             --reach "$GITHUB_WORKSPACE/crat-reach.json" \
-            --severity-floor "${{ inputs.severity_floor }}" \
+            --severity-floor "${{ inputs.severity_floor || 'HIGH' }}" \
             ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: Upload analysis artifacts
