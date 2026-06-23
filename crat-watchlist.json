@@ -1,8 +1,0 @@
-{
-  "description": "CVE watchlist for the CrAT reachability gate. Replace these example entries with real advisories from your scanner or the Manifest platform. The gate blocks a run when a listed package is reachable from this repo's code at or above the chosen severity floor. Packages not present in this repo are ignored.",
-  "packages": [
-    { "name": "fluent-ffmpeg", "cve": "CVE-EXAMPLE-0001", "severity": "HIGH" },
-    { "name": "react-dom", "cve": "CVE-EXAMPLE-0002", "severity": "MEDIUM" },
-    { "name": "lodash", "cve": "CVE-EXAMPLE-0003", "severity": "CRITICAL" }
-  ]
-}

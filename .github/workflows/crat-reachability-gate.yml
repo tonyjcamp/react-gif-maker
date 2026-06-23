@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       severity_floor:
-        description: "Block only on watchlist entries at or above this severity"
+        description: "Block only on findings at or above this severity"
         type: choice
         default: HIGH
         options:
@@ -40,12 +40,45 @@ jobs:
       - name: Install cdxgen (SBOM generator CrAT shells out to)
         run: npm install -g @cyclonedx/cdxgen
 
+      # --- Vulnerability data, generated fresh from this run's code ---
+
+      - name: Generate SBOM (no platform upload)
+        uses: manifest-cyber/manifest-github-action@v1.6.0
+        with:
+          sbomGenerator: syft
+          sbomOutput: cyclonedx-json
+          sbomPublish: "false"
+          path: ${{ github.workspace }}
+          # writes ./bom.json
+
+      - name: Scan SBOM for vulnerabilities (Grype)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+            | sh -s -- -b /usr/local/bin
+          grype "sbom:$GITHUB_WORKSPACE/bom.json" -o json > "$GITHUB_WORKSPACE/grype.json"
+          echo "Grype matches: $(jq '.matches | length' "$GITHUB_WORKSPACE/grype.json")"
+
+      - name: Build watchlist from scan results
+        run: |
+          jq '{
+            description: "auto-generated from grype on this run",
+            packages: [ .matches[] | {
+              name: .artifact.name,
+              cve: .vulnerability.id,
+              severity: ( .vulnerability.severity | ascii_upcase
+                | if (. == "CRITICAL" or . == "HIGH" or . == "MEDIUM") then . else "LOW" end )
+            } ]
+          }' "$GITHUB_WORKSPACE/grype.json" > "$GITHUB_WORKSPACE/crat-watchlist.json"
+          echo "Watchlist entries: $(jq '.packages | length' "$GITHUB_WORKSPACE/crat-watchlist.json")"
+
+      # --- Reachability, generated fresh from this run's code ---
+
       - name: Fetch CrAT (private) and install its deps
         env:
           CRAT_REPO_TOKEN: ${{ secrets.CRAT_REPO_TOKEN }}
         run: |
           if [ -z "$CRAT_REPO_TOKEN" ]; then
-            echo "::error::CRAT_REPO_TOKEN secret is not set. Add a fine-grained PAT with read access to manifest-cyber/CRAT."
+            echo "::error::CRAT_REPO_TOKEN secret is not set. Add a token with read access to manifest-cyber/CRAT."
             exit 1
           fi
           git clone --depth 1 \
@@ -60,18 +93,18 @@ jobs:
           bun run crat -- generate "$GITHUB_WORKSPACE" \
             --output "$GITHUB_WORKSPACE/crat-packages.json"
 
-      - name: Analyze reachability for watchlisted packages present in this repo
+      - name: Analyze reachability for vulnerable packages present in this repo
         run: |
-          # Only ask CrAT about watchlist packages that actually exist here.
-          # `reach` errors on an unknown package, and a package you don't
-          # depend on can't be reachable anyway.
+          # Only ask CrAT about packages that exist here. `reach` errors on an
+          # unknown package, and a package you don't depend on can't be reachable.
           NAMES=$(jq -rn \
             --slurpfile wl "$GITHUB_WORKSPACE/crat-watchlist.json" \
             --slurpfile pk "$GITHUB_WORKSPACE/crat-packages.json" '
               ($pk[0].packages | map(.name)) as $present
-              | [ $wl[0].packages[].name | select(. as $n | $present | index($n)) ]
+              | ($wl[0].packages | map(.name) | unique) as $want
+              | [ $want[] | select(. as $n | $present | index($n)) ]
               | join(",")')
-          echo "Watchlisted packages present in repo: ${NAMES:-<none>}"
+          echo "Vulnerable packages present in repo: ${NAMES:-<none>}"
           if [ -n "$NAMES" ]; then
             cd "$RUNNER_TEMP/crat"
             bun run crat -- reach "$GITHUB_WORKSPACE/crat-packages.json" \
@@ -95,5 +128,8 @@ jobs:
         with:
           name: crat-analysis
           path: |
+            bom.json
+            grype.json
+            crat-watchlist.json
             crat-packages.json
             crat-reach.json

@@ -33,6 +33,10 @@ const dryRun = process.argv.includes("--dry-run");
 const RANK = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
 const floorRank = RANK[severityFloor] ?? RANK.HIGH;
 
+// An unrecognized severity should never block on its own. Rank it below LOW
+// so it only counts when the floor is set to the lowest level deliberately.
+const severityRank = (s) => RANK[s] ?? 0;
+
 const watchlist = JSON.parse(readFileSync(watchlistPath, "utf8"));
 const reach = JSON.parse(readFileSync(reachPath, "utf8"));
 
@@ -62,7 +66,7 @@ for (const item of watchlist.packages ?? []) {
 
   if (paths === 0) {
     notReachable.push(record);
-  } else if ((RANK[severity] ?? RANK.HIGH) < floorRank) {
+  } else if (severityRank(severity) < floorRank) {
     belowFloor.push(record);
   } else {
     blocking.push(record);
