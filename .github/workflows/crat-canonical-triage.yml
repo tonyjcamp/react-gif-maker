@@ -2,16 +2,29 @@ name: CrAT Canonical SBOM + Auto-Triage
 
 # Action 2 of the gate design. EXPERIMENTAL, manual trigger while validating.
 # Publishes the canonical SBOM to the real react-gif-maker asset, runs CrAT
-# reachability, then auto-triages CVEs that are NOT reachable as "Not Affected"
-# on the platform (automated VEX from reachability). The canonical asset is
-# kept (this is where triage lives), unlike the ephemeral gate.
+# reachability (assess = LLM/function-level, or reach = deterministic/package-level),
+# then auto-triages CVEs judged NOT reachable as "Not Affected" (automated VEX).
+# The canonical asset is kept (this is where triage lives).
 #
 # Later this replaces sbom.yml and triggers on push to master.
 on:
   workflow_dispatch:
     inputs:
+      engine:
+        description: "Reachability engine"
+        type: choice
+        default: assess
+        options: [assess, reach]
+      llm_model:
+        description: "LLM for assess (provider/model)"
+        type: string
+        default: anthropic/claude-sonnet-4.5
+      include_triaged:
+        description: "Assess vulns even if already triaged"
+        type: boolean
+        default: false
       triage_status:
-        description: "Triage status to apply to unreachable CVEs"
+        description: "Triage status for unreachable CVEs"
         type: string
         default: notAffected
       triage_scope:
@@ -19,7 +32,7 @@ on:
         type: string
         default: thisAssetVersionOnly
       test_triage_cve:
-        description: "Optional CVE id to force-triage (validates the write contract on this repo, which has no unreachable CVEs)"
+        description: "Optional CVE id to force-triage (validates the write contract)"
         type: string
         default: ""
 
@@ -30,7 +43,6 @@ env:
 jobs:
   canonical-triage:
     runs-on: ubuntu-latest
-    # Serialize so the canonical asset is never written by two runs at once.
     concurrency:
       group: crat-canonical-${{ github.repository }}
       cancel-in-progress: false
@@ -67,7 +79,6 @@ jobs:
           [ -z "$SBOM_ID" ] && SBOM_ID=$(grep -oE '[0-9a-f]{24}' publish-out.json publish-err.log | head -1)
           [ -z "$SBOM_ID" ] && { echo "::error::no sbom_id"; exit 1; }
           echo "SBOM_ID=$SBOM_ID" >> "$GITHUB_ENV"
-          echo "canonical sbom: $SBOM_ID"
 
       - name: Wait for scan and download VDR
         env:
@@ -91,64 +102,76 @@ jobs:
           jq empty "$GITHUB_WORKSPACE/manifest-vdr.json" || { echo "::error::bad VDR"; head -c 200 "$GITHUB_WORKSPACE/manifest-vdr.json"; exit 1; }
           echo "VDR vulns: $(jq '(.asset.vulnerabilities // []) | length' "$GITHUB_WORKSPACE/manifest-vdr.json")"
 
-      - name: Build watchlist from VDR
-        run: |
-          jq '{ packages: [ .asset.vulnerabilities[]? as $v | $v.affectedComponents[]?
-            | { name: (capture("pkg:[^/]+/(?<n>[^@]+)@").n // .), cve: $v.cveId,
-                severity: (($v.cvssSeverity // "LOW") | ascii_upcase) } ] }' \
-            "$GITHUB_WORKSPACE/manifest-vdr.json" > "$GITHUB_WORKSPACE/crat-watchlist.json"
-
-      - name: CrAT generate + reach
+      - name: Reachability analysis + select unreachable CVEs
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CRAT_REPO_TOKEN: ${{ secrets.CRAT_REPO_TOKEN }}
         run: |
+          set -e
           git clone --depth 1 "https://x-access-token:${CRAT_REPO_TOKEN}@github.com/manifest-cyber/CRAT.git" "$RUNNER_TEMP/crat"
           cd "$RUNNER_TEMP/crat" && bun install
-          bun run crat -- generate "$GITHUB_WORKSPACE" --output "$GITHUB_WORKSPACE/crat-packages.json"
-          NAMES=$(jq -rn --slurpfile wl "$GITHUB_WORKSPACE/crat-watchlist.json" --slurpfile pk "$GITHUB_WORKSPACE/crat-packages.json" '
-            ($pk[0].packages | map(.name)) as $present
-            | ($wl[0].packages | map(.name) | unique) as $want
-            | [ $want[] | select(. as $n | $present | index($n)) ] | join(",")')
-          echo "present vulnerable packages: ${NAMES:-<none>}"
-          if [ -n "$NAMES" ]; then
-            bun run crat -- reach "$GITHUB_WORKSPACE/crat-packages.json" --package "$NAMES" --output "$GITHUB_WORKSPACE/crat-reach.json"
+          cd "$GITHUB_WORKSPACE"
+
+          if [ "${{ inputs.engine }}" = "assess" ]; then
+            if [ -z "$ANTHROPIC_API_KEY" ]; then
+              echo "::error::engine=assess requires the ANTHROPIC_API_KEY secret"; exit 1
+            fi
+            INC=""
+            [ "${{ inputs.include_triaged }}" = "true" ] && INC="--include-triaged"
+            ( cd "$RUNNER_TEMP/crat" && bun run crat -- assess "$GITHUB_WORKSPACE" \
+                --vdr "$GITHUB_WORKSPACE/manifest-vdr.json" \
+                --llm "${{ inputs.llm_model }}" \
+                --llm-api-key "$ANTHROPIC_API_KEY" \
+                --concurrency 5 $INC \
+                -o "$GITHUB_WORKSPACE/assessment.json" )
+            echo "assessment summary:"
+            jq '{components: (.components|length), llm: .llmModel,
+                 reachable: [.components[].assessments[]?|select(.reachabilityLabel=="REACHABLE")]|length,
+                 potential: [.components[].assessments[]?|select(.reachabilityLabel=="POTENTIALLY REACHABLE")]|length,
+                 unreachable: [.components[].assessments[]?|select(.reachabilityLabel=="UNREACHABLE FROM APPLICATION")]|length}' \
+              "$GITHUB_WORKSPACE/assessment.json"
+            UNREACH=$(node "$GITHUB_WORKSPACE/scripts/crat-assess-select.mjs" "$GITHUB_WORKSPACE/assessment.json" unreachable)
           else
-            echo "[]" > "$GITHUB_WORKSPACE/crat-reach.json"
+            jq '{ packages: [ .asset.vulnerabilities[]? as $v | $v.affectedComponents[]?
+              | { name: (capture("pkg:[^/]+/(?<n>[^@]+)@").n // .), cve: $v.cveId,
+                  severity: (($v.cvssSeverity // "LOW") | ascii_upcase) } ] }' \
+              "$GITHUB_WORKSPACE/manifest-vdr.json" > "$GITHUB_WORKSPACE/crat-watchlist.json"
+            ( cd "$RUNNER_TEMP/crat" && bun run crat -- generate "$GITHUB_WORKSPACE" --output "$GITHUB_WORKSPACE/crat-packages.json" )
+            NAMES=$(jq -rn --slurpfile wl "$GITHUB_WORKSPACE/crat-watchlist.json" --slurpfile pk "$GITHUB_WORKSPACE/crat-packages.json" '
+              ($pk[0].packages | map(.name)) as $present
+              | ($wl[0].packages | map(.name) | unique) as $want
+              | [ $want[] | select(. as $n | $present | index($n)) ] | join(",")')
+            if [ -n "$NAMES" ]; then
+              ( cd "$RUNNER_TEMP/crat" && bun run crat -- reach "$GITHUB_WORKSPACE/crat-packages.json" --package "$NAMES" --output "$GITHUB_WORKSPACE/crat-reach.json" )
+            else
+              echo "[]" > "$GITHUB_WORKSPACE/crat-reach.json"
+            fi
+            UNREACH=$(node "$GITHUB_WORKSPACE/scripts/crat-triage-select.mjs" "$GITHUB_WORKSPACE/crat-watchlist.json" "$GITHUB_WORKSPACE/crat-reach.json")
           fi
+          echo "unreachable CVEs: ${UNREACH:-<none>}"
+          echo "UNREACH=$UNREACH" >> "$GITHUB_ENV"
 
       - name: Auto-triage unreachable CVEs as Not Affected
         env:
           MANIFEST_API_KEY: ${{ secrets.MANIFEST_API_KEY }}
         run: |
-          UNREACH=$(node "$GITHUB_WORKSPACE/scripts/crat-triage-select.mjs" \
-            "$GITHUB_WORKSPACE/crat-watchlist.json" "$GITHUB_WORKSPACE/crat-reach.json")
-          echo "unreachable CVEs from CrAT: ${UNREACH:-<none>}"
-          TEST_CVE="${{ inputs.test_triage_cve }}"
           ALL="$UNREACH"
-          if [ -n "$TEST_CVE" ]; then
-            [ -n "$ALL" ] && ALL="$ALL,$TEST_CVE" || ALL="$TEST_CVE"
-            echo "including forced test CVE: $TEST_CVE"
-          fi
+          TEST_CVE="${{ inputs.test_triage_cve }}"
+          if [ -n "$TEST_CVE" ]; then [ -n "$ALL" ] && ALL="$ALL,$TEST_CVE" || ALL="$TEST_CVE"; fi
           CVES=$(echo "$ALL" | jq -R 'split(",") | map(select(length>0)) | unique')
           COUNT=$(echo "$CVES" | jq 'length')
           echo "CVEs to triage: $COUNT -> $CVES"
           if [ "$COUNT" = "0" ]; then echo "nothing to triage"; exit 0; fi
           BODY=$(jq -n \
-            --arg s "${{ inputs.triage_status }}" \
-            --arg a "$ORG_ASSET_ID" \
-            --arg sc "${{ inputs.triage_scope }}" \
-            --argjson cves "$CVES" \
-            --arg j "vulnerable_code_not_in_execute_path" \
-            --arg d "Auto-triaged by CrAT reachability (run ${GITHUB_RUN_ID}): affected package not reachable from application entrypoints." \
+            --arg s "${{ inputs.triage_status }}" --arg a "$ORG_ASSET_ID" --arg sc "${{ inputs.triage_scope }}" \
+            --argjson cves "$CVES" --arg j "vulnerable_code_not_in_execute_path" \
+            --arg d "Auto-triaged by CrAT ${{ inputs.engine }} (run ${GITHUB_RUN_ID}): not reachable from application entrypoints." \
             '{triageStatusName:$s, organizationAssetId:$a, scope:$sc, cveIds:$cves, justification:$j, details:$d}')
-          echo "POST body: $BODY"
           CODE=$(curl -s -o /tmp/triage.json -w '%{http_code}' -X POST \
             -H "Authorization: Bearer $MANIFEST_API_KEY" -H "Content-Type: application/json" \
             "$MANIFEST_API/triage" -d "$BODY")
           echo "triage HTTP $CODE"; cat /tmp/triage.json || true
-          if [ "$CODE" != "200" ] && [ "$CODE" != "201" ]; then
-            echo "::warning::triage write returned $CODE (check status/scope strings, create:vulnerability-triage permission, paid tier)"
-          fi
+          [ "$CODE" != "200" ] && [ "$CODE" != "201" ] && echo "::warning::triage write returned $CODE"
 
       - name: Upload artifacts
         if: always()
@@ -157,6 +180,7 @@ jobs:
           name: canonical-triage-analysis
           path: |
             manifest-vdr.json
+            assessment.json
             crat-watchlist.json
             crat-packages.json
             crat-reach.json
