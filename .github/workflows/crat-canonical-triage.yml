@@ -104,7 +104,7 @@ jobs:
 
       - name: Reachability analysis + select unreachable CVEs
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.CRAT_LOGIC_KEY }}
           CRAT_REPO_TOKEN: ${{ secrets.CRAT_REPO_TOKEN }}
         run: |
           set -e
