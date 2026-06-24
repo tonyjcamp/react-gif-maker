@@ -1,0 +1,63 @@
+name: CrAT Assessment
+
+# Runs CrAT reachability assessment via manifest-cli. The CLI does the whole
+# flow in one command: install the toolchain, generate + publish the SBOM,
+# wait for the platform scan, download the VDR, and run `crat assess` (LLM,
+# function-level reachability), writing assessment-<timestamp>.json.
+# Manual trigger while validating.
+on:
+  workflow_dispatch:
+    inputs:
+      llm_model:
+        description: "LLM for assess (provider/model)"
+        type: string
+        default: anthropic/claude-sonnet-4.5
+
+jobs:
+  assess:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install cdxgen + manifest-cli
+        run: |
+          npm install -g @cyclonedx/cdxgen
+          curl -sSfL https://raw.githubusercontent.com/manifest-cyber/cli/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Run CrAT assessment
+        env:
+          MANIFEST_API_KEY: ${{ secrets.MANIFEST_API_KEY }}
+          CRAT_LOGIC_KEY: ${{ secrets.CRAT_LOGIC_KEY }}
+        run: |
+          manifest-cli crat . \
+            --install-dependencies -vvv \
+            --api-key "$MANIFEST_API_KEY" \
+            --llm "${{ inputs.llm_model }}" \
+            --llm-api-key "$CRAT_LOGIC_KEY"
+
+      - name: Summarize assessment
+        run: |
+          F=$(ls -t assessment-*.json assessment.json 2>/dev/null | head -1)
+          if [ -z "$F" ]; then echo "::error::no assessment file produced"; exit 1; fi
+          echo "Assessment file: $F"
+          jq '{
+            llm: .llmModel,
+            totalComponents,
+            vulnerableComponents,
+            reachable: [.components[].assessments[]? | select(.reachabilityLabel=="REACHABLE")] | length,
+            potential: [.components[].assessments[]? | select(.reachabilityLabel=="POTENTIALLY REACHABLE")] | length,
+            unreachable: [.components[].assessments[]? | select(.reachabilityLabel=="UNREACHABLE FROM APPLICATION")] | length
+          }' "$F"
+
+      - name: Upload assessment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crat-assessment
+          path: assessment*.json
