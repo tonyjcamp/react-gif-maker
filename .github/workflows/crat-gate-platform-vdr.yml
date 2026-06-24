@@ -1,0 +1,172 @@
+name: CrAT Gate (Platform VDR, ephemeral asset)
+
+# EXPERIMENTAL. Manual trigger only while we validate the approach.
+# Per run: publish an SBOM to Manifest under a unique ephemeral asset name,
+# pull that asset's VDR (Manifest's own vuln data), run CrAT reachability,
+# gate on reachable HIGH/CRITICAL, then DELETE the ephemeral asset so nothing
+# lingers on the platform. The real react-gif-maker asset (from sbom.yml on
+# merge) is never touched.
+on:
+  workflow_dispatch:
+    inputs:
+      severity_floor:
+        description: "Block on findings at or above this severity"
+        type: choice
+        default: HIGH
+        options: [LOW, MEDIUM, HIGH, CRITICAL]
+      dry_run:
+        description: "Report findings but do not fail the run"
+        type: boolean
+        default: false
+
+env:
+  MANIFEST_API: https://api.manifestcyber.com/v1
+
+jobs:
+  platform-vdr-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo under test
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install cdxgen (for CrAT) and manifest-cli + syft
+        run: |
+          npm install -g @cyclonedx/cdxgen
+          curl -sSfL https://raw.githubusercontent.com/manifest-cyber/cli/main/install.sh | sh -s -- -b /usr/local/bin
+          manifest-cli install --generator=syft --destination=/usr/local/bin || true
+          manifest-cli --version || true
+
+      - name: Compute ephemeral asset name
+        run: |
+          SHORT=${GITHUB_SHA:0:7}
+          echo "ASSET_NAME=rgm-ephemeral-${GITHUB_RUN_ID}-${SHORT}" >> "$GITHUB_ENV"
+          echo "Ephemeral asset: rgm-ephemeral-${GITHUB_RUN_ID}-${SHORT}"
+
+      - name: Publish ephemeral SBOM to Manifest
+        env:
+          MANIFEST_API_KEY: ${{ secrets.MANIFEST_API_KEY }}
+        run: |
+          set -e
+          manifest-cli generate "$GITHUB_WORKSPACE" \
+            --publish \
+            --name "$ASSET_NAME" \
+            --generator syft \
+            --output cyclonedx-json \
+            --api-key "$MANIFEST_API_KEY" \
+            > publish-out.json 2> publish-err.log || { cat publish-err.log; exit 1; }
+          echo "--- publish stdout ---"; cat publish-out.json
+          echo "--- publish stderr (tail) ---"; tail -5 publish-err.log || true
+          SBOM_ID=$(jq -r '.sbomId // .sbom_id // .id // empty' publish-out.json 2>/dev/null)
+          if [ -z "$SBOM_ID" ]; then
+            SBOM_ID=$(grep -oE '[0-9a-f]{24}' publish-out.json publish-err.log | head -1)
+          fi
+          if [ -z "$SBOM_ID" ]; then echo "::error::could not determine sbom_id"; exit 1; fi
+          echo "SBOM_ID=$SBOM_ID" >> "$GITHUB_ENV"
+          echo "Published SBOM id: $SBOM_ID"
+
+      - name: Wait for scan and download VDR
+        env:
+          MANIFEST_API_KEY: ${{ secrets.MANIFEST_API_KEY }}
+        run: |
+          set -e
+          AID=""
+          for i in $(seq 1 60); do
+            RESP=$(curl -s -H "Authorization: Bearer $MANIFEST_API_KEY" "$MANIFEST_API/sbom/$SBOM_ID")
+            DONE=$(echo "$RESP" | jq -r '.data[0].whenVulnerabilityCounted // empty')
+            AID=$(echo "$RESP" | jq -r '.data[0].organizationAssetId // empty')
+            STATUS=$(echo "$RESP" | jq -r '.data[0].status // empty')
+            echo "poll $i: status=$STATUS counted=${DONE:-no} asset=${AID:-?}"
+            if [ -n "$DONE" ] && [ -n "$AID" ]; then break; fi
+            sleep 5
+          done
+          if [ -z "$AID" ]; then echo "::error::no organizationAssetId / scan did not complete"; exit 1; fi
+          echo "ORG_ASSET_ID=$AID" >> "$GITHUB_ENV"
+          curl -s -H "Authorization: Bearer $MANIFEST_API_KEY" \
+            "$MANIFEST_API/asset/exportVulnerability?format=json&organizationAssetId=$AID" \
+            -o "$GITHUB_WORKSPACE/manifest-vdr.json"
+          echo "VDR vulnerabilities: $(jq '(.asset.vulnerabilities // []) | length' "$GITHUB_WORKSPACE/manifest-vdr.json")"
+
+      - name: Build watchlist from the platform VDR
+        run: |
+          jq '{
+            description: "from manifest platform VDR",
+            packages: [ .asset.vulnerabilities[]? as $v
+              | $v.affectedComponents[]?
+              | { name: (capture("pkg:[^/]+/(?<n>[^@]+)@").n // .),
+                  cve: $v.cveId,
+                  severity: (($v.cvssSeverity // "LOW") | ascii_upcase
+                    | if (. == "CRITICAL" or . == "HIGH" or . == "MEDIUM") then . else "LOW" end) } ]
+          }' "$GITHUB_WORKSPACE/manifest-vdr.json" > "$GITHUB_WORKSPACE/crat-watchlist.json"
+          echo "watchlist entries: $(jq '.packages | length' "$GITHUB_WORKSPACE/crat-watchlist.json")"
+
+      - name: Fetch CrAT and install
+        env:
+          CRAT_REPO_TOKEN: ${{ secrets.CRAT_REPO_TOKEN }}
+        run: |
+          git clone --depth 1 \
+            "https://x-access-token:${CRAT_REPO_TOKEN}@github.com/manifest-cyber/CRAT.git" \
+            "$RUNNER_TEMP/crat"
+          cd "$RUNNER_TEMP/crat" && bun install
+
+      - name: CrAT generate + reach
+        run: |
+          cd "$RUNNER_TEMP/crat"
+          bun run crat -- generate "$GITHUB_WORKSPACE" --output "$GITHUB_WORKSPACE/crat-packages.json"
+          NAMES=$(jq -rn \
+            --slurpfile wl "$GITHUB_WORKSPACE/crat-watchlist.json" \
+            --slurpfile pk "$GITHUB_WORKSPACE/crat-packages.json" '
+              ($pk[0].packages | map(.name)) as $present
+              | ($wl[0].packages | map(.name) | unique) as $want
+              | [ $want[] | select(. as $n | $present | index($n)) ] | join(",")')
+          echo "vulnerable packages present: ${NAMES:-<none>}"
+          if [ -n "$NAMES" ]; then
+            bun run crat -- reach "$GITHUB_WORKSPACE/crat-packages.json" \
+              --package "$NAMES" --output "$GITHUB_WORKSPACE/crat-reach.json"
+          else
+            echo "[]" > "$GITHUB_WORKSPACE/crat-reach.json"
+          fi
+
+      - name: Evaluate gate
+        run: |
+          node "$GITHUB_WORKSPACE/scripts/crat-gate.mjs" \
+            --watchlist "$GITHUB_WORKSPACE/crat-watchlist.json" \
+            --reach "$GITHUB_WORKSPACE/crat-reach.json" \
+            --severity-floor "${{ inputs.severity_floor || 'HIGH' }}" \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Delete ephemeral asset (always)
+        if: always()
+        env:
+          MANIFEST_API_KEY: ${{ secrets.MANIFEST_API_KEY }}
+        run: |
+          if [ -z "${SBOM_ID:-}" ]; then echo "no SBOM_ID captured; nothing to delete"; exit 0; fi
+          echo "Deleting ephemeral SBOM $SBOM_ID ..."
+          CODE=$(curl -s -o /tmp/del.json -w '%{http_code}' -X DELETE \
+            -H "Authorization: Bearer $MANIFEST_API_KEY" -H "Content-Type: application/json" \
+            "$MANIFEST_API/sboms/delete" -d "{\"sbomIds\":[\"$SBOM_ID\"]}")
+          echo "delete HTTP $CODE"; cat /tmp/del.json || true
+          if [ "$CODE" = "403" ]; then
+            echo "::warning::delete returned 403 — token likely lacks delete:sbom-and-vex. Asset left for sweep/manual cleanup."
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-vdr-analysis
+          path: |
+            manifest-vdr.json
+            crat-watchlist.json
+            crat-packages.json
+            crat-reach.json
+            publish-out.json
