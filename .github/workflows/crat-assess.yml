@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       llm_model:
-        description: "LLM for assess (provider/model)"
+        description: "LLM for assess (provider/model). Use Anthropic's hyphenated model IDs (e.g. claude-sonnet-4-5), not dotted (claude-sonnet-4.5 returns 404)."
         type: string
-        default: anthropic/claude-sonnet-4.5
+        default: anthropic/claude-sonnet-4-5
 
 jobs:
   assess:
