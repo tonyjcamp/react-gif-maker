@@ -91,9 +91,14 @@ jobs:
           done
           if [ -z "$AID" ]; then echo "::error::no organizationAssetId / scan did not complete"; exit 1; fi
           echo "ORG_ASSET_ID=$AID" >> "$GITHUB_ENV"
-          curl -s -H "Authorization: Bearer $MANIFEST_API_KEY" \
+          # The export returns a 302 redirect to a presigned S3 URL; -L follows it.
+          curl -sL -H "Authorization: Bearer $MANIFEST_API_KEY" \
             "$MANIFEST_API/asset/exportVulnerability?format=json&organizationAssetId=$AID" \
             -o "$GITHUB_WORKSPACE/manifest-vdr.json"
+          if ! jq empty "$GITHUB_WORKSPACE/manifest-vdr.json" 2>/dev/null; then
+            echo "::error::VDR is not valid JSON (first line follows):"
+            head -c 300 "$GITHUB_WORKSPACE/manifest-vdr.json"; exit 1
+          fi
           echo "VDR vulnerabilities: $(jq '(.asset.vulnerabilities // []) | length' "$GITHUB_WORKSPACE/manifest-vdr.json")"
 
       - name: Build watchlist from the platform VDR
