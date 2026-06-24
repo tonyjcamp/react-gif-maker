@@ -25,10 +25,12 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install cdxgen + manifest-cli
+      - name: Install cdxgen + manifest-cli + syft
         run: |
           npm install -g @cyclonedx/cdxgen
           curl -sSfL https://raw.githubusercontent.com/manifest-cyber/cli/main/install.sh | sh -s -- -b /usr/local/bin
+          # manifest-cli crat needs the SBOM generator; --install-dependencies installs crat but not syft
+          manifest-cli install --generator=syft --destination=/usr/local/bin
 
       - name: Run CrAT assessment
         env:
