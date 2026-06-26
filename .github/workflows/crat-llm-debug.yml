@@ -1,0 +1,30 @@
+name: LLM 400 Debug
+
+# One-off: prove whether the assess HTTP 400 is the temperature+top_p conflict.
+# Calls the Anthropic API directly with the CRAT_LOGIC_KEY: once with BOTH
+# temperature and top_p (the shape CrAT/ax-llm send), once with temperature only.
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      KEY: ${{ secrets.CRAT_LOGIC_KEY }}
+      MODEL: claude-sonnet-4-5
+    steps:
+      - name: Both temperature + top_p (CrAT's request shape — expect 400)
+        run: |
+          echo "--- model: $MODEL, temperature + top_p both set ---"
+          curl -s -o /tmp/both.json -w 'HTTP %{http_code}\n' https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $KEY" -H "anthropic-version: 2023-06-01" -H "content-type: application/json" \
+            -d "{\"model\":\"$MODEL\",\"max_tokens\":32,\"temperature\":0.1,\"top_p\":0.9,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}"
+          echo "--- response body ---"; cat /tmp/both.json; echo
+
+      - name: Temperature only (expect 200 — proves the key works)
+        run: |
+          echo "--- model: $MODEL, temperature only ---"
+          curl -s -o /tmp/temp.json -w 'HTTP %{http_code}\n' https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $KEY" -H "anthropic-version: 2023-06-01" -H "content-type: application/json" \
+            -d "{\"model\":\"$MODEL\",\"max_tokens\":32,\"temperature\":0.1,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}"
+          echo "--- response body (first 300 chars) ---"; head -c 300 /tmp/temp.json; echo
