@@ -38,7 +38,7 @@ jobs:
           CRAT_LOGIC_KEY: ${{ secrets.CRAT_LOGIC_KEY }}
         run: |
           manifest-cli crat . \
-            --install-dependencies -vvv \
+            --install-dependencies \
             --api-key "$MANIFEST_API_KEY" \
             --llm "${{ inputs.llm_model }}" \
             --llm-api-key "$CRAT_LOGIC_KEY"
