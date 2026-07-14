@@ -5,9 +5,11 @@
 // Usage:
 //   node crat-assess-gate.mjs --assessment <file> --severity-floor HIGH [--dry-run]
 //
-// Only REACHABLE blocks. POTENTIALLY REACHABLE is reported but does not block
-// (it's the non-deterministic middle ground; keep the hard gate on confident
-// findings). Exit 1 = block; branch protection turns that into a blocked merge.
+// Blocks on REACHABLE OR POTENTIALLY REACHABLE at or above the floor. Gating on
+// both (not just REACHABLE) is deliberate: the LLM can flip a borderline CVE
+// between REACHABLE and POTENTIALLY across runs on identical code, so gating on
+// the union keeps the pass/fail decision stable. Exit 1 = block; branch
+// protection turns that into a blocked merge.
 
 import { readFileSync } from "node:fs";
 
@@ -34,9 +36,10 @@ for (const c of data.components ?? []) {
   }
 }
 
-const blocking = rows.filter((r) => r.label === "REACHABLE" && rank(r.sev) >= floorRank);
-const reachableBelow = rows.filter((r) => r.label === "REACHABLE" && rank(r.sev) < floorRank);
-const potential = rows.filter((r) => r.label === "POTENTIALLY REACHABLE");
+const blocks = (r) => (r.label === "REACHABLE" || r.label === "POTENTIALLY REACHABLE") && rank(r.sev) >= floorRank;
+const belowFloor = (r) => (r.label === "REACHABLE" || r.label === "POTENTIALLY REACHABLE") && rank(r.sev) < floorRank;
+const blocking = rows.filter(blocks);
+const below = rows.filter(belowFloor);
 const unreachable = rows.filter((r) => r.label === "UNREACHABLE FROM APPLICATION");
 
 const rule = "-".repeat(72);
@@ -45,11 +48,10 @@ console.log(`CrAT assess gate   floor: ${floor}${dryRun ? "   (dry-run)" : ""}  
 console.log(rule);
 const section = (label, arr) => {
   console.log(`${label}: ${arr.length}`);
-  for (const r of arr) console.log(`  - ${r.cve}  ${r.pkg}  [${r.sev}]`);
+  for (const r of arr) console.log(`  - ${r.cve}  ${r.pkg}  [${r.sev}]  ${r.label}`);
 };
-section("BLOCKING (reachable, at or above floor)", blocking);
-section("Reachable, below floor", reachableBelow);
-section("Potentially reachable (not blocking)", potential);
+section("BLOCKING (reachable or potentially reachable, at or above floor)", blocking);
+section("Below severity floor (not blocking)", below);
 console.log(`Unreachable: ${unreachable.length}`);
 console.log(rule);
 
@@ -58,8 +60,8 @@ if (blocking.length > 0) {
     console.log(`DRY-RUN: ${blocking.length} finding(s) would block this PR. Not failing.`);
     process.exit(0);
   }
-  console.error(`FAIL: ${blocking.length} reachable vulnerability(ies) at or above ${floor}.`);
+  console.error(`FAIL: ${blocking.length} reachable/potentially-reachable vulnerability(ies) at or above ${floor}.`);
   process.exit(1);
 }
-console.log("PASS: no reachable vulnerabilities at or above the floor.");
+console.log("PASS: no reachable or potentially-reachable vulnerabilities at or above the floor.");
 process.exit(0);
