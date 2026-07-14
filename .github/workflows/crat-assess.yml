@@ -1,15 +1,26 @@
 name: CrAT Assessment
 
-# Runs CrAT reachability assessment via manifest-cli. The CLI does the whole
-# flow in one command: install the toolchain, generate + publish the SBOM,
-# wait for the platform scan, download the VDR, and run `crat assess` (LLM,
-# function-level reachability), writing assessment-<timestamp>.json.
-# Manual trigger while validating.
+# CrAT reachability GATE. Runs `manifest-cli crat` (install toolchain, generate +
+# publish SBOM, scan, download VDR, run `crat assess` — LLM function-level
+# reachability), then BLOCKS the PR when any REACHABLE vulnerability is at or
+# above the severity floor (default HIGH). Make this job a required status check
+# in branch protection to enforce the block.
 on:
+  pull_request:
+    branches: [master]
   workflow_dispatch:
     inputs:
+      severity_floor:
+        description: "Block on REACHABLE findings at or above this severity"
+        type: choice
+        default: HIGH
+        options: [LOW, MEDIUM, HIGH, CRITICAL]
+      dry_run:
+        description: "Report findings but do not fail the run"
+        type: boolean
+        default: false
       llm_model:
-        description: "LLM for assess (provider/model). Use Anthropic's hyphenated model IDs (e.g. claude-sonnet-4-5), not dotted (claude-sonnet-4.5 returns 404)."
+        description: "LLM for assess (provider/model). Hyphenated Anthropic ids (claude-sonnet-4-5), not dotted."
         type: string
         default: anthropic/claude-sonnet-4-5
 
@@ -40,7 +51,7 @@ jobs:
           manifest-cli crat . \
             --install-dependencies \
             --api-key "$MANIFEST_API_KEY" \
-            --llm "${{ inputs.llm_model }}" \
+            --llm "${{ inputs.llm_model || 'anthropic/claude-sonnet-4-5' }}" \
             --llm-api-key "$CRAT_LOGIC_KEY"
 
       - name: Summarize assessment
@@ -56,6 +67,15 @@ jobs:
             potential: [.components[].assessments[]? | select(.reachabilityLabel=="POTENTIALLY REACHABLE")] | length,
             unreachable: [.components[].assessments[]? | select(.reachabilityLabel=="UNREACHABLE FROM APPLICATION")] | length
           }' "$F"
+
+      - name: Evaluate gate (block on reachable findings)
+        run: |
+          F=$(ls -t assessment-*.json assessment.json 2>/dev/null | head -1)
+          if [ -z "$F" ]; then echo "::error::no assessment file produced"; exit 1; fi
+          node "$GITHUB_WORKSPACE/scripts/crat-assess-gate.mjs" \
+            --assessment "$F" \
+            --severity-floor "${{ inputs.severity_floor || 'HIGH' }}" \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: Upload assessment
         if: always()
